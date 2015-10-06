@@ -29,6 +29,8 @@ import locale
 import logging
 import traceback
 import re
+# swyopo 2015.09.21 add
+import wx
 
 from serial import SerialException
 
@@ -1559,6 +1561,24 @@ class pronsole(cmd.Cmd):
         self.p.send_now("G1 E" + str(length) + " F" + str(feed))
         self.p.send_now("G90")
 
+    # swyoo 2015.09.21 add second head function
+    def do_extrude_final_two_head(self, length, feed, head):
+        if length > 0:
+            self.log(_("Extruding %fmm of filament.") % (length,))
+        elif length < 0:
+            self.log(_("Reversing %fmm of filament.") % (-length,))
+        else:
+            self.log(_("Length is 0, not doing anything."))
+
+        if head == "T1":
+            self.p.send_now("T1")
+        else:
+            self.p.send_now("T0")
+
+        self.p.send_now("G91")
+        self.p.send_now("G1 E" + str(length) + " F" + str(feed))
+        self.p.send_now("G90")
+
     def help_extrude(self):
         self.log(_("Extrudes a length of filament, 5mm by default, or the number of mm given as a parameter"))
         self.log(_("extrude - extrudes 5mm of filament at 300mm/min (5mm/s)"))
@@ -1638,8 +1658,15 @@ class pronsole(cmd.Cmd):
             self.onecmd("M107")
             self.log(_("; Power supply off"))
             self.onecmd("M81")
+            # swyoo 2015.09.21 add
+            self.On_Print_state("ready")
         else:
             self.logError(_("Printer is not online. Unable to turn it off."))
+            # swyoo 2015.09.21 add
+            dlg = wx.MessageDialog(self, _("Printer is not online. Unable to turn it off."), _("Printing"), wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            # MainWindow.switch_tab(self, 0)
+            dlg.Destroy()
 
     def help_off(self):
         self.log(_("Turns off everything on the printer"))

@@ -85,6 +85,9 @@ def MainToolbar(root, parentpanel = None, use_wrapsizer = False):
     root.offbtn = make_autosize_button(parentpanel, _("Off"), root.off, _("Turn printer off"), self)
     root.printerControls.append(root.offbtn)
 
+    # swyoo 2015.09.30 imsi
+    root.dis_ch2 = make_autosize_button(parentpanel, _("View Ch"), root.display_ch, _("View size change"), self)
+
     self.AddStretchSpacer(prop = 4)
 
     if root.settings.lockbox:

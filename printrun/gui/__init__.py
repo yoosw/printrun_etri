@@ -28,6 +28,23 @@ from .controls import ControlsSizer, add_extra_controls
 from .viz import VizPane
 from .log import LogPane
 from .toolbar import MainToolbar
+# swyoo 2015.09.30 change toolbar position
+from .toolbar_home import HomeToolbar
+
+# swyoo 2015.08.31 for image display in linux
+from printrun.utils import imagefile
+
+# swyoo 2015.09.08 divide os nt, linux
+import os
+# swyoo 2015.09.09 add for tap move
+# import time
+from control_setting import Setting_Control
+from control_printing import Print_Control
+from control_motor import Motor_Control
+from control_original import createTabbedGui_sub, createGui_sub
+
+from .widgets import TempGauge
+from .utils import make_autosize_button
 
 class ToggleablePane(wx.BoxSizer):
 
@@ -119,6 +136,19 @@ class MainWindow(wx.Frame):
         self.panel = wx.Panel(self, -1)
         self.reset_ui()
         self.statefulControls = []
+        # swyoo 2015.09.10 for hide tap5
+        self.page_hidden = False
+
+    # swyoo 2015.09.04 for guage
+    def TimerHandler(self, event):
+
+        # self.count = self.count + 1
+        #
+        # if self.count >= 100:
+        #     # self.count = 0
+        #     return
+        # self.gauge.SetValue(self.count)
+        self.gauge.SetValue(int(self.var_loading_count))
 
     def reset_ui(self):
         self.panels = []
@@ -132,6 +162,180 @@ class MainWindow(wx.Frame):
     def registerPanel(self, panel, add_to_list = True):
         panel.SetBackgroundColour(self.bgcolor)
         if add_to_list: self.panels.append(panel)
+
+    def createBaseGui(self):
+        self.notesizer = wx.BoxSizer(wx.VERTICAL)
+        # self.notebook = wx.Notebook(self.panel)
+        # self.notebook = wx.Notebook(self.panel, style=wx.NB_LEFT)
+        if os.name == "nt":
+            self.notebook = wx.Notebook(self.panel, style=wx.BK_DEFAULT)
+        else:
+            self.notebook = wx.Notebook(self.panel, style=
+                                                    # wx.BK_DEFAULT
+                                                    # wx.BK_TOP
+                                                    # #wx.BK_BOTTOM
+                                                    wx.BK_LEFT
+                                                    # wx.BK_RIGHT
+                                                    #  | wx.NB_MULTILINE
+                                                    )
+
+        # self.notebook.SetBackgroundColour(self.bgcolor)
+        self.notebook.SetBackgroundColour('#E6E7E7')
+
+        self.page0panel = self.newPanel(self.notebook)
+        self.page1panel = self.newPanel(self.notebook)
+        self.page2panel = self.newPanel(self.notebook)
+        self.page3panel = self.newPanel(self.notebook)
+        self.page4panel = self.newPanel(self.notebook)
+        self.page5panel = self.newPanel(self.notebook)
+
+        # swyoo 2015.08.29 set color, image
+        self.page0panel.SetBackgroundColour('#E6E7E7')
+        self.page1panel.SetBackgroundColour('#E6E7E7')
+        self.page2panel.SetBackgroundColour('#E6E7E7')
+        self.page3panel.SetBackgroundColour('#E6E7E7')
+        # self.page4panel.SetBackgroundColour('#E6E7E7')
+        # self.page5panel.SetBackgroundColour('#E6E7E7')
+
+        # swyoo 2015.09.02 set background image
+        image_file = 'flexor/print_bg.png'
+        bmp1 = wx.Image(imagefile(image_file), wx.BITMAP_TYPE_ANY).ConvertToBitmap()
+        self.bitmap1 = wx.StaticBitmap(self.page1panel, -1, bmp1, (0, 0))
+
+        image_file = 'flexor/motor_bg.png'
+        bmp2 = wx.Image(imagefile(image_file), wx.BITMAP_TYPE_ANY).ConvertToBitmap()
+        self.bitmap2 = wx.StaticBitmap(self.page2panel, -1, bmp2, (0, 0))
+
+        # image_file = 'flexor/setting_bg.png'
+        # bmp3 = wx.Image(imagefile(image_file), wx.BITMAP_TYPE_ANY).ConvertToBitmap()
+        # self.bitmap3 = wx.StaticBitmap(self.page3panel, -1, bmp3, (0, 0))
+
+        # font_loading_file = wx.Font(16, wx.MODERN, wx.NORMAL, wx.NORMAL, False, u'Consolas')
+        font_bold = wx.Font(20, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, u'Consolas')
+        self.font_gauge = wx.Font(30, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, u'Consolas')
+        if os.name == "nt":
+            self.font_base = wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.NORMAL, wx.NORMAL, False, u'Consolas')
+        else:
+            self.font_base = wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.NORMAL, wx.NORMAL, False, u'Consolas')
+        self.font_combo = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, u'Consolas')
+
+        self.font_big = wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.NORMAL, wx.BOLD, False)
+        self.font_16 = wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.NORMAL, wx.BOLD)
+        self.font_motor = wx.Font(26, wx.FONTFAMILY_DEFAULT, wx.NORMAL, wx.NORMAL)
+
+        #========================================================== tap0 : Home
+        self.hometoolbarsizer = HomeToolbar(self, self.page0panel)
+        self.page0panel.SetSizer(self.hometoolbarsizer)
+        #========================================================== tap1 : Print
+        Print_Control(self, self.page1panel)
+        #========================================================== tap2 : Motor
+        Motor_Control(self, self.page2panel)
+        #========================================================== tap3 : Setting
+        Setting_Control(self,  self.page3panel)
+        #========================================================== tap4 : Log
+        # swyoo 2015.09.01 prevent 3d view for loading time in raspberry
+        if 0:
+            self.mainsizer = wx.BoxSizer(wx.HORIZONTAL)
+            self.splitterwindow = wx.SplitterWindow(self.page4panel, style = wx.SP_3D)
+            page4sizer1 = wx.BoxSizer(wx.HORIZONTAL)
+            page4panel1 = self.newPanel(self.splitterwindow)
+
+            page4sizer2 = wx.BoxSizer(wx.HORIZONTAL)
+            page4panel2 = self.newPanel(self.splitterwindow)
+            vizpane = VizPane(self, page4panel1)
+            page4sizer1.Add(vizpane, 1, wx.EXPAND)
+            page4sizer2.Add(LogPane(self, page4panel2), 1, wx.EXPAND)
+            page4panel1.SetSizer(page4sizer1)
+            page4panel2.SetSizer(page4sizer2)
+            self.splitterwindow.SetMinimumPaneSize(1)
+            self.splitterwindow.SetSashGravity(0.5)
+            self.splitterwindow.SplitVertically(page4panel1, page4panel2,
+                                                self.settings.last_sash_position)
+
+            self.mainsizer.Add(self.splitterwindow, 1, wx.EXPAND)
+            self.page4panel.SetSizer(self.mainsizer)
+        else:
+             # swyoo 2015.09.01 should pass VizPane for etc
+            vizpane = VizPane(self, self.page4panel)
+
+            self.mainsizer_4 = wx.BoxSizer(wx.HORIZONTAL)
+            self.mainsizer_4.Add(LogPane(self, self.page4panel), 1, wx.EXPAND)
+            self.page4panel.SetSizer(self.mainsizer_4)
+        #========================================================== tap5 : Help
+        if self.settings.uimode in (_("Tabbed"), _("Tabbed with platers")):
+            createTabbedGui_sub(self, self.page5panel)
+        else:
+            createGui_sub(self, self.settings.uimode == _("Compact"),
+                          self.settings.controlsmode == "Mini", self.page5panel)
+        #========================================================== tap End
+        self.notesizer.Add(self.notebook, 1, wx.EXPAND)
+        if 0:
+            self.notebook.AddPage(self.page0panel, _("Home"))
+            self.notebook.AddPage(self.page1panel, _("Print"))
+            self.notebook.AddPage(self.page2panel, _("Motor"))
+            self.notebook.AddPage(self.page3panel, _("Setting"))
+            self.notebook.AddPage(self.page4panel, _("Log.."))
+            self.notebook.AddPage(self.page5panel, _("Original"))
+        else:
+            self.notebook.AddPage(self.page0panel, _(""))
+            self.notebook.AddPage(self.page1panel, _(""))
+            self.notebook.AddPage(self.page2panel, _(""))
+            self.notebook.AddPage(self.page3panel, _(""))
+            self.notebook.AddPage(self.page4panel, _(""))
+            if os.name == "nt":
+                self.notebook.AddPage(self.page5panel, _("Original"))
+
+        # list containing notebook images:
+        # .ico seem to be more OS portable
+        il = wx.ImageList(107, 79) # the (16, 16) is the size in pixels of the images
+        img0 = il.Add(wx.Bitmap(imagefile('flexor/menu/main.png'), wx.BITMAP_TYPE_PNG))
+        img1 = il.Add(wx.Bitmap(imagefile('flexor/menu/print.png'), wx.BITMAP_TYPE_PNG))
+        img2 = il.Add(wx.Bitmap(imagefile('flexor/menu/motor.png'), wx.BITMAP_TYPE_PNG))
+        img3 = il.Add(wx.Bitmap(imagefile('flexor/menu/setting.png'), wx.BITMAP_TYPE_PNG))
+        img4 = il.Add(wx.Bitmap(imagefile('flexor/menu/log.png'), wx.BITMAP_TYPE_PNG))
+        # img5 = il.Add(wx.Bitmap(imagefile('flexor/menu/92p.png'), wx.BITMAP_TYPE_PNG))
+
+        # swyoo 2015.09.01 add to tap the image
+        # set images to pages:
+        # #first assign image list created above to notebook:
+        self.notebook.AssignImageList(il)
+        # then assign each image in list to corresponding page.
+        # #the sharp-eyed will see you could use a loop for this,
+        # #but for maximum clarity/understanding I'm using the long way...
+        self.notebook.SetPageImage(0, img0)
+        self.notebook.SetPageImage(1, img1)
+        self.notebook.SetPageImage(2, img2)
+        self.notebook.SetPageImage(3, img3)
+        self.notebook.SetPageImage(4, img4)
+        # self.notebook.SetPageImage(5, img5)
+
+        # if this isn't called the notebook background color doesn't work right when switching
+        #  themes in XP.
+        self.notebook.SetBackgroundColour(self.notebook.GetThemeBackgroundColour())
+        self.panel.SetSizer(self.notesizer)
+        # self.panel.SetSizerAndFit(self.notesizer)
+        minsize = [600, 450]
+        self.SetMinSize(self.ClientToWindowSize(minsize))  # client to window
+        self.Fit()
+
+    def Visual_tab(self, event):
+        if self.page_hidden:
+            self.notebook.AddPage(self.page5panel, "Original")
+            self.page_hidden = False
+        else:
+            self.notebook.RemovePage(5)
+            self.page5panel.Hide()
+            self.page_hidden = True
+
+    # swyoo 2015.09.09 add for tap move
+    def switch_tab(self, page):
+        notebook = self.notebook
+        # window so ok, but too late in raspi
+        # if page == 1:
+        #     time.sleep(0.5)
+        # else:
+        #     time.sleep(0.2)
+        notebook.SetSelection(page)
 
     def createTabbedGui(self):
         self.notesizer = wx.BoxSizer(wx.VERTICAL)

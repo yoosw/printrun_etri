@@ -60,9 +60,13 @@ class VizPane(wx.BoxSizer):
     def __init__(self, root, parentpanel = None):
         super(VizPane, self).__init__(wx.VERTICAL)
         if not parentpanel: parentpanel = root.panel
-        if root.settings.mainviz == "None":
+        # swyoo 2015.09.01 prevent 3d view for loading time in raspberry
+        # if root.settings.mainviz == "None":
+        if 1:
             root.gviz = NoViz()
             root.gwindow = NoVizWindow()
+            # swyoo 2015.09.03 test
+            root.settings.mainviz = "None"
             return
         use2dview = root.settings.mainviz == "2D"
         if root.settings.mainviz == "3D":

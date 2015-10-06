@@ -28,6 +28,10 @@ class LogPane(wx.BoxSizer):
         self.Add(root.logbox, 1, wx.EXPAND)
         bottom_panel = root.newPanel(parentpanel)
         lbrs = wx.BoxSizer(wx.HORIZONTAL)
+
+        # swyoo 2015.09.09 make clear button
+        root.clearbtn = make_button(bottom_panel, _("Clear"), root.clear_log, _("Clear output console"), style = wx.BU_EXACTFIT, container = lbrs)
+
         root.commandbox = wx.TextCtrl(bottom_panel, style = wx.TE_PROCESS_ENTER)
         root.commandbox.SetToolTip(wx.ToolTip(_("Send commands to printer\n(Type 'help' for simple\nhelp function)")))
         root.commandbox.Bind(wx.EVT_TEXT_ENTER, root.sendline)

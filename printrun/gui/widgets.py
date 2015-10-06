@@ -251,9 +251,14 @@ class ButtonEdit(wx.Dialog):
 
 class TempGauge(wx.Panel):
 
-    def __init__(self, parent, size = (200, 22), title = "",
+    def __init__(self, parent, size = (400, 22), title = "",
                  maxval = 240, gaugeColour = None, bgcolor = "#FFFFFF"):
         wx.Panel.__init__(self, parent, -1, size = size)
+
+        # swyoo 2015.09.18 fix the size
+        self.width = size[0]
+        self.height = size[1]
+        # swyoo
         self.Bind(wx.EVT_PAINT, self.paint)
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
         self.bgcolor = wx.Colour()
@@ -292,9 +297,16 @@ class TempGauge(wx.Panel):
         return wx.Colour(*map(int, rgb))
 
     def paint(self, ev):
-        self.width, self.height = self.GetClientSizeTuple()
+        # swyoo 2015.09.18 fix the size
+        if 0:
+            self.width, self.height = self.GetClientSizeTuple()
+
         self.recalc()
-        x0, y0, x1, y1, xE, yE = 1, 1, self.ypt + 1, 1, self.width + 1 - 2, 20
+        # swyoo 2015.09.21 gauge height size up
+        if 0:
+            x0, y0, x1, y1, xE, yE = 1, 1, self.ypt + 1, 1, self.width + 1 - 2, 20
+        else:
+            x0, y0, x1, y1, xE, yE = 1, 1, self.ypt + 1, 1, self.width + 1 - 2, 28
         dc = wx.PaintDC(self)
         dc.SetBackground(wx.Brush(self.bgcolor))
         dc.Clear()
@@ -353,10 +365,14 @@ class TempGauge(wx.Panel):
         text = u"T\u00B0 %u/%u" % (self.value, self.setpoint)
         # gc.SetFont(gc.CreateFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.WHITE))
         # gc.DrawText(text, 29,-2)
-        gc.SetFont(gc.CreateFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.WHITE))
+        # swyoo 2015.09.11 test
+        # gc.SetFont(gc.CreateFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.WHITE))
+        gc.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.WHITE)
         gc.DrawText(self.title, x0 + 19, y0 + 4)
         gc.DrawText(text, x0 + 119, y0 + 4)
-        gc.SetFont(gc.CreateFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)))
+        # swyoo 2015.09.15 change font size and on for raspi
+        # gc.SetFont(gc.CreateFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)))
+        gc.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         gc.DrawText(self.title, x0 + 18, y0 + 3)
         gc.DrawText(text, x0 + 118, y0 + 3)
 

@@ -35,3 +35,12 @@ def make_custom_button(root, parentpanel, i, style = 0):
     root.btndict[i.command] = btn
     root.printerControls.append(btn)
     return btn
+
+# swyoo 2015.10.06 add
+def make_flexor_button_add(parent, label, callback, pos = wx.DefaultPosition, size = wx.DefaultSize, style = 0):
+    button = wx.Button(parent, -1, label, pos=pos, style=style, size=size)
+    button.Bind(wx.EVT_BUTTON, callback)
+    return button
+
+def make_flexor_button(*args):
+    return make_flexor_button_add(*args, size = (-1, -1), style = wx.BU_EXACTFIT)

@@ -46,10 +46,11 @@ except:
 
 from .gui.widgets import SpecialButton, MacroEditor, PronterOptions, ButtonEdit
 
-winsize = (800, 500)
+# swyoo 2015.07.08 after change 750, 450 set for 7inch LCD resolution
+winsize = (750, 450) # 800, 500
 layerindex = 0
 if os.name == "nt":
-    winsize = (800, 530)
+    winsize = (800, 600) # 800, 530
 
 pronterface_quitting = False
 
@@ -61,6 +62,10 @@ from .settings import wxSetting, HiddenSetting, StringSetting, SpinSetting, \
     FloatSpinSetting, BooleanSetting, StaticTextSetting
 from printrun import gcoder
 from .pronsole import REPORT_NONE, REPORT_POS, REPORT_TEMP, REPORT_MANUAL
+
+# swyoo 2015.09.14 for calculator
+from printrun.gui.calculator import Calculator
+import re
 
 class ConsoleOutputHandler(object):
     """Handle console output. All messages go through the logging submodule. We setup a logging handler to get logged messages and write them to both stdout (unless a log file path is specified, in which case we add another logging handler to write to this file) and the log panel.
@@ -178,10 +183,20 @@ class PronterWindow(MainWindow, pronsole.pronsole):
         # -- Okai, it seems it breaks things like update_gviz_params ><
         os.putenv("UBUNTU_MENUPROXY", "0")
         size = (self.settings.last_window_width, self.settings.last_window_height)
-        MainWindow.__init__(self, None, title = _("Pronterface"), size = size)
+
+        # swyoo 2015.08.25 change the title
+        # MainWindow.__init__(self, None, title = _("Pronterface"), size = size)
+        MainWindow.__init__(self, None, title = _("3delight"), size = size)
+        # MainWindow.__init__(self, None, title=_("3delight"), size=size,
+        #                     style = wx.DEFAULT_FRAME_STYLE & ~ (wx.MAXIMIZE_BOX | wx.MINIMIZE_BOX | wx.RESIZE_BORDER))
+        # MainWindow.__init__(self, None, title=_("3delight"), size=size,
+        #                     style=wx.CAPTION | wx.SYSTEM_MENU | wx.CLOSE_BOX)
+
         if self.settings.last_window_maximized:
             self.Maximize()
-        self.SetIcon(wx.Icon(iconfile("pronterface.png"), wx.BITMAP_TYPE_PNG))
+        # swyoo 2015.09.01 change icon
+        # self.SetIcon(wx.Icon(iconfile("pronterface.png"), wx.BITMAP_TYPE_PNG))
+        self.SetIcon(wx.Icon(iconfile("pronterface_test.png"), wx.BITMAP_TYPE_PNG))
         self.Bind(wx.EVT_SIZE, self.on_resize)
         self.Bind(wx.EVT_MAXIMIZE, self.on_maximize)
         self.window_ready = True
@@ -191,28 +206,49 @@ class PronterWindow(MainWindow, pronsole.pronsole):
         self.p.z_feedrate = self.settings.z_feedrate
 
         self.panel.SetBackgroundColour(self.bgcolor)
-        customdict = {}
-        try:
-            execfile(configfile("custombtn.txt"), customdict)
-            if len(customdict["btns"]):
-                if not len(self.custombuttons):
-                    try:
-                        self.custombuttons = customdict["btns"]
-                        for n in xrange(len(self.custombuttons)):
-                            self.cbutton_save(n, self.custombuttons[n])
-                        os.rename("custombtn.txt", "custombtn.old")
-                        rco = open("custombtn.txt", "w")
-                        rco.write(_("# I moved all your custom buttons into .pronsolerc.\n# Please don't add them here any more.\n# Backup of your old buttons is in custombtn.old\n"))
-                        rco.close()
-                    except IOError, x:
-                        logging.error(str(x))
-                else:
-                    logging.warning(_("Note!!! You have specified custom buttons in both custombtn.txt and .pronsolerc"))
-                    logging.warning(_("Ignoring custombtn.txt. Remove all current buttons to revert to custombtn.txt"))
 
-        except:
-            pass
+        # swyoo 2015.08.27 no need custom button
+        # customdict = {}
+        # try:
+        #     execfile(configfile("custombtn.txt"), customdict)
+        #     if len(customdict["btns"]):
+        #         if not len(self.custombuttons):
+        #             try:
+        #                 self.custombuttons = customdict["btns"]
+        #                 for n in xrange(len(self.custombuttons)):
+        #                     self.cbutton_save(n, self.custombuttons[n])
+        #                 os.rename("custombtn.txt", "custombtn.old")
+        #                 rco = open("custombtn.txt", "w")
+        #                 rco.write(_("# I moved all your custom buttons into .pronsolerc.\n# Please don't add them here any more.\n# Backup of your old buttons is in custombtn.old\n"))
+        #                 rco.close()
+        #             except IOError, x:
+        #                 logging.error(str(x))
+        #         else:
+        #             logging.warning(_("Note!!! You have specified custom buttons in both custombtn.txt and .pronsolerc"))
+        #             logging.warning(_("Ignoring custombtn.txt. Remove all current buttons to revert to custombtn.txt"))
+        #
+        # except:
+        #     pass
+
+        # swyoo 2015.09.07 make distance choice and display for test
+        self.move_unit = 0.1
+        if os.name == "nt":
+            self.dis_mode = 0
+        else:
+            self.dis_mode = 1
+        self.var_temp_1_value = 230
+        self.var_temp_2_value = 230
+        self.var_loading_file_name = "Select File"
+        self.var_loading_count = 0
+        self.motor_display_select = 0
+        self.print_start_time = 0
+        # off_line, ready, print, pause, filament
+        self.print_next_state = "ready"
+        self.extrude_head = "T0"
+
+        # swyoo 2015.08.25 no need create_menu
         self.create_menu()
+
         self.update_recent_files("recentfiles", self.settings.recentfiles)
 
         self.reload_ui()
@@ -273,11 +309,16 @@ class PronterWindow(MainWindow, pronsole.pronsole):
             self.reset_ui()
 
         # Create UI
-        if self.settings.uimode in (_("Tabbed"), _("Tabbed with platers")):
-            self.createTabbedGui()
+        # swyoo 2015.08.27 fix the menu
+        if 1:
+            # self.createTabbedGui()
+            self.createBaseGui()
         else:
-            self.createGui(self.settings.uimode == _("Compact"),
-                           self.settings.controlsmode == "Mini")
+            if self.settings.uimode in (_("Tabbed"), _("Tabbed with platers")):
+                self.createTabbedGui()
+            else:
+                self.createGui(self.settings.uimode == _("Compact"),
+                               self.settings.controlsmode == "Mini")
 
         if hasattr(self, "splitterwindow"):
             self.splitterwindow.SetSashPosition(self.settings.last_sash_position)
@@ -377,11 +418,19 @@ class PronterWindow(MainWindow, pronsole.pronsole):
 
     def do_pront_extrude(self, l = ""):
         feed = self.settings.e_feedrate
-        self.do_extrude_final(self.edist.GetValue(), feed)
+        if 0:
+            self.do_extrude_final(self.edist.GetValue(), feed)
+        else:
+            head = self.extrude_head
+            self.do_extrude_final_two_head(self.edist.GetValue(), feed, head)
 
     def do_pront_reverse(self, l = ""):
         feed = self.settings.e_feedrate
-        self.do_extrude_final(- self.edist.GetValue(), feed)
+        if 0:
+            self.do_extrude_final(- self.edist.GetValue(), feed)
+        else:
+            head = self.extrude_head
+            self.do_extrude_final_two_head(- self.edist.GetValue(), feed, head)
 
     def do_settemp(self, l = ""):
         try:
@@ -396,6 +445,49 @@ class PronterWindow(MainWindow, pronsole.pronsole):
                     self.p.send_now("M104 S" + l)
                     self.log(_("Setting hotend temperature to %f degrees Celsius.") % f)
                     self.sethotendgui(f)
+                else:
+                    self.logError(_("Printer is not online."))
+            else:
+                self.logError(_("You cannot set negative temperatures. To turn the hotend off entirely, set its temperature to 0."))
+        except Exception, x:
+            self.logError(_("You must enter a temperature. (%s)") % (repr(x),))
+
+    # swyoo 2015.09.08 make new function for head temp
+    def do_settemp_sec(self, nozzle="", on_off=""):
+        try:
+            temp = 0
+            nozzle_choice = "T0 S"
+            if nozzle == "nozzle_one":
+                temp = self.var_temp_1_value
+                if on_off == "off": temp = 0
+                nozzle_choice = "T0 S"
+
+            elif nozzle == "nozzle_two":
+                temp = self.var_temp_2_value
+                if on_off == "off": temp = 0
+                nozzle_choice = "T1 S"
+
+            f = float(temp)
+            if f >= 0:
+                if self.p.online:
+                    # swyoo 2015.09.19 two nozzle
+                    # self.p.send_now("M104 S" + str(temp))
+                    self.p.send_now("M104 " + nozzle_choice + str(temp))
+                    self.log(_("Setting hotend temperature to %f degrees Celsius.") % f)
+
+                    # swyoo 2015.09.15 change temp display
+                    if 0:
+                        self.sethotendgui(f)
+                        wx.CallAfter(self.text_print_nozzle_temp1_set.SetLabel, str(temp) + u"\u00B0C")
+                    else:
+                        if nozzle == "nozzle_one":
+                            self.sethotendgui_temp1(f)
+                            wx.CallAfter(self.text_print_nozzle_temp1_set.SetLabel, str(temp) + u"\u00B0C")
+
+                        elif nozzle == "nozzle_two":
+                            self.sethotendgui_temp2(f)
+                            wx.CallAfter(self.text_print_nozzle_temp2_set.SetLabel, str(temp) + u"\u00B0C")
+
                 else:
                     self.logError(_("Printer is not online."))
             else:
@@ -438,9 +530,23 @@ class PronterWindow(MainWindow, pronsole.pronsole):
         except Exception, x:
             self.logError(_("You must enter a speed. (%s)") % (repr(x),))
 
+    def do_setspeed_flexo(self, l = ""):
+        try:
+            speed = int(l)
+            if self.p.online:
+                self.p.send_now("M220 S" + l)
+                self.log(_("Setting print speed factor to %d%%.") % speed)
+            else:
+                self.logError(_("Printer is not online."))
+        except Exception, x:
+            self.logError(_("You must enter a speed. (%s)") % (repr(x),))
+
     def setbedgui(self, f):
         self.bsetpoint = f
-        if self.display_gauges: self.bedtgauge.SetTarget(int(f))
+        # swyoo 2015.09.21 no use
+        if 0:
+            if self.display_gauges: self.bedtgauge.SetTarget(int(f))
+
         if self.display_graph: wx.CallAfter(self.graph.SetBedTargetTemperature, int(f))
         if f > 0:
             wx.CallAfter(self.btemp.SetValue, str(f))
@@ -477,6 +583,18 @@ class PronterWindow(MainWindow, pronsole.pronsole):
             wx.CallAfter(self.settbtn.SetForegroundColour, None)
             wx.CallAfter(self.htemp.SetBackgroundColour, "white")
             wx.CallAfter(self.htemp.Refresh)
+
+    # swyoo 2015.09.21 add and no use upper sethotendgui
+    def sethotendgui_temp1(self, f):
+        self.hsetpoint = f
+        self.hottgauge.SetTarget(int(f))
+        if self.display_graph: wx.CallAfter(self.graph.SetExtruder0TargetTemperature, int(f))
+
+    def sethotendgui_temp2(self, f):
+        self.hsetpoint = f
+        self.hottgauge2.SetTarget(int(f))
+        # if self.display_graph: wx.CallAfter(self.graph.SetExtruder0TargetTemperature, int(f))
+
 
     def rescanports(self, event = None):
         scanned = self.scanserial()
@@ -608,12 +726,71 @@ class PronterWindow(MainWindow, pronsole.pronsole):
             center_y = self.build_dimensions_list[1] / 2 + self.build_dimensions_list[4]
             feed = self.settings.xy_feedrate
             self.onecmd('G0 X%s Y%s F%s' % (center_x, center_y, feed))
+        # swyoo 2015.09.07 add motor off, Extrude, Reverse
+        elif axis == "Motors off":
+            self.onecmd('M84')
+        elif axis == "Extrude":
+            self.onecmd('pront_extrude')
+            self.cur_button = None
+        elif axis == "Reverse":
+            self.onecmd('pront_reverse')
+            self.cur_button = None
+        # swyoo 2015.09.07 add motor off, Extrude, Reverse
         else:
             return
         self.p.send_now('M114')
 
     def clamped_move_message(self):
         self.log(_("Manual move outside of the build volume prevented (see the \"Clamp manual moves\" option)."))
+
+    # swyoo 2015.09.07 make distance choice
+    def move_set(self, length):
+        if length != 0:
+            self.move_unit = length
+            if length == 10:
+                self.btn_bmp_motor_0.SetBitmapLabel(self.bmp_motor_0)
+                self.btn_bmp_motor_1.SetBitmapLabel(self.bmp_motor_1)
+                self.btn_bmp_motor_10.SetBitmapLabel(self.bmp_motor_10_ch)
+            elif length == 1:
+                self.btn_bmp_motor_0.SetBitmapLabel(self.bmp_motor_0)
+                self.btn_bmp_motor_1.SetBitmapLabel(self.bmp_motor_1_ch)
+                self.btn_bmp_motor_10.SetBitmapLabel(self.bmp_motor_10)
+            else:
+                self.btn_bmp_motor_0.SetBitmapLabel(self.bmp_motor_0_ch)
+                self.btn_bmp_motor_1.SetBitmapLabel(self.bmp_motor_1)
+                self.btn_bmp_motor_10.SetBitmapLabel(self.bmp_motor_10)
+            self.Refresh()
+        else:
+            self.move_unit = 0.1
+
+    def move_distance(self, xyz, length, calculator):
+
+        if calculator == "unit":
+            length_cal = self.move_unit * length
+        else:
+            length_cal = length
+
+        # minus value input prevent
+        if length < 0:
+            if xyz == "x" and (self.current_pos[0] + length_cal) < 0:
+                return
+            elif xyz == "y" and (self.current_pos[1] + length_cal) < 0:
+                return
+            elif xyz == "z" and (self.current_pos[2] + length_cal) < 0:
+                return
+        else:
+            pass
+
+        if xyz == "x":
+            self.moveXY(length_cal, 0)
+        elif xyz == "y":
+            self.moveXY(0, length_cal)
+        elif xyz == "z":
+            self.moveZ(length_cal)
+        else:
+            pass
+        # swyoo 2015.09.07 make distance choice
+        # self.btn_bmp_motor_0.SetFocus()
 
     def moveXY(self, x, y):
         # When user clicks on the XY control, the Z control no longer gets spacebar/repeat signals
@@ -976,6 +1153,8 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
 
     def statuschecker_inner(self):
         status_string = ""
+        # swyoo 2015.09.09 for gauge
+        percent_string = ""
         if self.sdprinting or self.uploading or self.p.printing:
             secondsremain, secondsestimate, progress = self.get_eta()
             if self.sdprinting or self.uploading:
@@ -985,12 +1164,22 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 else:
                     status_string += _("SD printing: %04.2f%% |") % (self.percentdone,)
             elif self.p.printing:
+                # swyoo 2015.09.09 for gauge
+                percent_string = _("%04.2f%%") % (100 * float(self.p.queueindex) / len(self.p.mainqueue))
+
                 status_string += _("Printing: %04.2f%% |") % (100 * float(self.p.queueindex) / len(self.p.mainqueue),)
                 status_string += _(" Line# %d of %d lines |") % (self.p.queueindex, len(self.p.mainqueue))
             if progress > 0:
                 status_string += _(" Est: %s of %s remaining | ") % (format_duration(secondsremain),
                                                                      format_duration(secondsestimate))
                 status_string += _(" Z: %.3f mm") % self.curlayer
+            # swyoo 2015.09.09 self.var_loading_count is for gauge
+            self.var_loading_count = int((100 * float(self.p.queueindex) / len(self.p.mainqueue)))
+            wx.CallAfter(self.text_gauge.SetLabel, percent_string)
+            # time check
+            print_duration = int(time.time() - self.print_start_time)
+            wx.CallAfter(self.text_print_time.SetLabel, format_duration(print_duration))
+
         elif self.loading_gcode:
             status_string = self.loading_gcode_message
         wx.CallAfter(self.statusbar.SetStatusText, status_string)
@@ -1040,11 +1229,12 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             if scanned:
                 port = scanned[0]
         baud = 115200
-        try:
-            baud = int(self.baud.GetValue())
-        except:
-            self.logError(_("Could not parse baud rate: ")
-                          + "\n" + traceback.format_exc())
+        # swyoo 2015.09.03 no select baudrate
+        # try:
+        #     baud = int(self.baud.GetValue())
+        # except:
+        #     self.logError(_("Could not parse baud rate: ")
+        #                   + "\n" + traceback.format_exc())
         if self.paused:
             self.p.paused = 0
             self.p.printing = 0
@@ -1082,6 +1272,13 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         wx.CallAfter(self.connectbtn.SetToolTip, wx.ToolTip(_("Connect to the printer")))
         wx.CallAfter(self.connectbtn.Bind, wx.EVT_BUTTON, self.connect)
 
+        # swyoo 2015.09.30 use again and add message
+        dlg = wx.MessageDialog(self, _("Not connected to printer. Reboot Please"), _("Dissconnect"), wx.OK | wx.ICON_WARNING)
+        # if dlg.ShowModal() == wx.OK:
+        dlg.ShowModal()
+        MainWindow.switch_tab(self, 0)
+        dlg.Destroy()
+
         wx.CallAfter(self.gui_set_disconnected)
 
         if self.paused:
@@ -1098,12 +1295,28 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
 
     def reset(self, event):
         self.log(_("Reset."))
-        dlg = wx.MessageDialog(self, _("Are you sure you want to reset the printer?"), _("Reset?"), wx.YES | wx.NO)
+        # swyoo 2015.09.21
+        # dlg = wx.MessageDialog(self, _("Are you sure you want to reset the printer?"), _("Reset?"), wx.YES | wx.NO)
+        if not self.p.online:
+            dlg = wx.MessageDialog(self, _("Printer is not online. Unable to reset."), _("Reset"),wx.OK | wx.ICON_WARNING)
+        else:
+            dlg = wx.MessageDialog(self, _("Are you sure you want to reset the printer?"), _("Reset?"), wx.YES | wx.NO)
+
         if dlg.ShowModal() == wx.ID_YES:
             self.p.reset()
-            self.sethotendgui(0)
-            self.setbedgui(0)
+
+            # swyoo 2015.09.21 add temp2 display
+            if 0:
+                self.sethotendgui(0)
+                self.setbedgui(0)
+            else:
+                self.sethotendgui_temp1(0)
+                self.sethotendgui_temp2(0)
+
             self.p.printing = 0
+
+            # swyoo 2015.09.21 add
+            self.On_Print_state("ready")
             wx.CallAfter(self.printbtn.SetLabel, _("Print"))
             if self.paused:
                 self.p.paused = 0
@@ -1122,26 +1335,64 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         wx.CallAfter(self.printbtn.SetLabel, _("Restart"))
         wx.CallAfter(self.toolbarsizer.Layout)
 
+        # swyoo 2015.09.23 add for initial temp
+        wx.CallAfter(self.text_print_nozzle_temp1_set.SetLabel, u"0 \u00B0C")
+        wx.CallAfter(self.text_print_nozzle_temp2_set.SetLabel, u"0 \u00B0C")
+
+    # swyoo 2015.10.06 add
+    def on_initvalue_print(self):
+        self.var_loading_count = 0
+        wx.CallAfter(self.gauge.SetValue, 0)
+        wx.CallAfter(self.text_gauge.SetLabel, "0%")
+        wx.CallAfter(self.text_print_time.SetLabel, "00:00:00")
+
     def printfile(self, event):
         self.extra_print_time = 0
-        if self.paused:
-            self.p.paused = 0
+        if self.paused :
+
+            if 0: # swyoo 2015.09.23 printcore  if self.paused: avoid
+                self.p.paused = 0
+
             self.paused = 0
-            if self.sdprinting:
-                self.on_startprint()
-                self.p.send_now("M26 S0")
-                self.p.send_now("M24")
+            # swyoo 2015.09.21 add for resume
+            if self.print_next_state == "resume" or self.print_next_state == "filament_done":
+                self.pause(None)
                 return
+            else:
+                if self.sdprinting:
+                    self.on_startprint()
+                    self.p.send_now("M26 S0")
+                    self.p.send_now("M24")
+                    return
+
+        # swyoo 2015.09.21 add
+        if self.print_next_state == "pause":
+            self.pause(None)
+            return
 
         if not self.fgcode:
-            wx.CallAfter(self.statusbar.SetStatusText, _("No file loaded. Please use load first."))
+            # swyoo 2015.09.09 change message
+            # wx.CallAfter(self.statusbar.SetStatusText, _("No file loaded. Please use load first."))
+            dlg = wx.MessageDialog(self, _("No file loaded. Please use load first."), _("File"), wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            # MainWindow.switch_tab(self, 0)
+            dlg.Destroy()
             return
         if not self.p.online:
-            wx.CallAfter(self.statusbar.SetStatusText, _("Not connected to printer."))
+            # swyoo 2015.09.09 change message
+            # wx.CallAfter(self.statusbar.SetStatusText, _("Not connected to printer."))
+            dlg = wx.MessageDialog(self, _("Printer is not online. Unable to print."), _("Connect"), wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            MainWindow.switch_tab(self, 0)
+            dlg.Destroy()
             return
         self.sdprinting = False
         self.on_startprint()
         self.p.startprint(self.fgcode)
+        # swyoo 2015.09.10 for time
+        self.print_start_time = time.time()
+        # swyoo 2015.09.21 add
+        self.On_Print_state("print")
 
     def sdprintfile(self, event):
         self.extra_print_time = 0
@@ -1177,12 +1428,18 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         self.uploading = False
 
     def pause(self, event = None):
-        if not self.paused:
+        # swyoo
+        # if not self.paused:
+        if not self.paused and self.print_next_state == "pause":
             self.log(_("Print paused at: %s") % format_time(time.time()))
             if self.sdprinting:
                 self.p.send_now("M25")
             else:
                 if not self.p.printing:
+                    # swyoo 2015.09.21 add
+                    dlg = wx.MessageDialog(self, _("Printer is not printing state. Unable to pause."), _("Pause"), wx.OK | wx.ICON_WARNING)
+                    dlg.ShowModal()
+                    dlg.Destroy()
                     return
                 self.p.pause()
                 self.p.runSmallScript(self.pauseScript)
@@ -1191,15 +1448,28 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             self.extra_print_time += int(time.time() - self.starttime)
             wx.CallAfter(self.pausebtn.SetLabel, _("Resume"))
             wx.CallAfter(self.toolbarsizer.Layout)
+            # swyoo 2015.09.21 add
+            self.On_Print_state("pause")
         else:
             self.log(_("Resuming."))
             self.paused = False
             if self.sdprinting:
                 self.p.send_now("M24")
             else:
+                # swyoo 2015.10.06 for filament change====
+                if self.print_next_state == "filament_done":
+                    # G28 X0 Y0         ;Home X Y
+                    self.p.send_now("G28 X0 Y0")
+                    # M82            ;Set extruder to Absolute Mode
+                    self.p.send_now("M82")
+                    # G92 E0         ;Set Extruder to 0
+                    self.p.send_now("G92 E0")
+                # =========================================
                 self.p.resume()
             wx.CallAfter(self.pausebtn.SetLabel, _("Pause"))
             wx.CallAfter(self.toolbarsizer.Layout)
+            # swyoo 2015.09.21 add
+            self.On_Print_state("resume")
 
     def recover(self, event):
         self.extra_print_time = 0
@@ -1322,7 +1592,9 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         dlg = None
         if filename is None:
             dlg = wx.FileDialog(self, _("Open file to print"), basedir, style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
-            dlg.SetWildcard(_("OBJ, STL, and GCODE files (*.gcode;*.gco;*.g;*.stl;*.STL;*.obj;*.OBJ)|*.gcode;*.gco;*.g;*.stl;*.STL;*.obj;*.OBJ|All Files (*.*)|*.*"))
+            # swyoo 2015.09.08 choose gcode file
+			# dlg.SetWildcard(_("OBJ, STL, and GCODE files (*.gcode;*.gco;*.g;*.stl;*.STL;*.obj;*.OBJ)|*.gcode;*.gco;*.g;*.stl;*.STL;*.obj;*.OBJ|All Files (*.*)|*.*"))
+            dlg.SetWildcard(_("GCODE files (*.gcode;*.gco;*.g)|*.gcode;*.gco;*.g"))
         if filename or dlg.ShowModal() == wx.ID_OK:
             if filename:
                 name = filename
@@ -1333,6 +1605,12 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 self.statusbar.SetStatusText(_("File not found!"))
                 return
             path = os.path.split(name)[0]
+
+            # swyoo 2015.09.08 display file name 2015.10.06 add gauge, print_time initial
+            self.var_loading_file_name = os.path.split(name)[1]
+            wx.CallAfter(self.text_loading_file.SetLabel, str(self.var_loading_file_name))
+            self.on_initvalue_print()
+
             if path != self.settings.last_file_path:
                 self.set("last_file_path", path)
             try:
@@ -1356,6 +1634,10 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 self.slice(name)
             else:
                 self.load_gcode_async(name)
+
+            # swyoo 2015.09. add for tap
+            MainWindow.switch_tab(self, 1)
+
         else:
             dlg.Destroy()
 
@@ -1410,7 +1692,8 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         self.log(message)
         self.statusbar.SetStatusText(message)
         self.savebtn.Enable(True)
-        self.loadbtn.SetLabel(_("Load File"))
+        # swyoo 2015.09.03 no need
+        # self.loadbtn.SetLabel(_("Load File"))
         self.printbtn.SetLabel(_("Print"))
         self.pausebtn.SetLabel(_("Pause"))
         self.pausebtn.Disable()
@@ -1518,6 +1801,9 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             wx.CallAfter(self.pausebtn.Disable)
             wx.CallAfter(self.printbtn.SetLabel, _("Print"))
             wx.CallAfter(self.toolbarsizer.Layout)
+            # swyoo 2015.10.02 for print button
+            self.On_Print_state("ready")
+            wx.CallAfter(self.text_gauge.SetLabel, "100%")
 
     def online(self):
         """Callback when printer goes online"""
@@ -1526,6 +1812,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
 
     def online_gui(self):
         """Callback when printer goes online (graphical bits)"""
+        # swyoo 2015.09.30 use again
         self.connectbtn.SetLabel(_("Disconnect"))
         self.connectbtn.SetToolTip(wx.ToolTip("Disconnect from the printer"))
         self.connectbtn.Bind(wx.EVT_BUTTON, self.disconnect)
@@ -1548,19 +1835,49 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             gline_s = gcoder.S(gline)
             if gline_s is not None:
                 temp = gline_s
-                if self.display_gauges: wx.CallAfter(self.hottgauge.SetTarget, temp)
+
+                test_bool = bool(re.search("T1", gline.raw))
+
+                if test_bool:
+                    nozzle_choice = "T1"
+                else:
+                    nozzle_choice = "T0"
+
+                # swyoo 2015.09.16 always diplay temp
+                # if self.display_gauges: wx.CallAfter(self.hottgauge.SetTarget, temp)
+
+                if nozzle_choice == "T1":
+                    wx.CallAfter(self.hottgauge2.SetTarget, temp)
+                    wx.CallAfter(self.text_print_nozzle_temp2_set.SetLabel, str(temp) + u" \u00B0C")
+                else:
+                    wx.CallAfter(self.hottgauge.SetTarget, temp)
+                    wx.CallAfter(self.text_print_nozzle_temp1_set.SetLabel, str(temp) + u" \u00B0C")
+
                 if self.display_graph: wx.CallAfter(self.graph.SetExtruder0TargetTemperature, temp)
         elif gline.command in ["M140", "M190"]:
             gline_s = gcoder.S(gline)
             if gline_s is not None:
                 temp = gline_s
-                if self.display_gauges: wx.CallAfter(self.bedtgauge.SetTarget, temp)
+                # swyoo 2015.09.21 no use
+                if 0:
+                    if self.display_gauges: wx.CallAfter(self.bedtgauge.SetTarget, temp)
+
                 if self.display_graph: wx.CallAfter(self.graph.SetBedTargetTemperature, temp)
         elif gline.command.startswith("T"):
             tool = gline.command[1:]
             if hasattr(self, "extrudersel"): wx.CallAfter(self.extrudersel.SetValue, tool)
         if gline.is_move:
             self.sentglines.put_nowait(gline)
+
+         # swyoo 2015.09.09 x, y, z position
+        if self.p.printing:
+            if self.motor_display_select >= 10:
+                wx.CallAfter(self.text_motor_x_position.SetLabel, "X : " + str(gline.current_x))
+                wx.CallAfter(self.text_motor_y_position.SetLabel, "Y : " + str(gline.current_y))
+                wx.CallAfter(self.text_motor_z_position.SetLabel, "Z : " + str(gline.current_z))
+                self.motor_display_select = 0
+            else:
+                self.motor_display_select += 1
 
     def is_excluded_move(self, gline):
         """Check whether the given moves ends at a position specified as
@@ -1637,28 +1954,59 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 hotend_temp = None
             if hotend_temp is not None:
                 if self.display_graph: wx.CallAfter(self.graph.SetExtruder0Temperature, hotend_temp)
-                if self.display_gauges: wx.CallAfter(self.hottgauge.SetValue, hotend_temp)
+
+                if 0:
+                    if self.display_gauges: wx.CallAfter(self.hottgauge.SetValue, hotend_temp)
+                else:
+                    wx.CallAfter(self.hottgauge.SetValue, hotend_temp)
+                    wx.CallAfter(self.text_print_nozzle_temp1_on.SetLabel, str(hotend_temp) + u"\u00B0C")
+
                 setpoint = None
                 if "T0" in temps and temps["T0"][1]: setpoint = float(temps["T0"][1])
                 elif temps["T"][1]: setpoint = float(temps["T"][1])
                 if setpoint is not None:
                     if self.display_graph: wx.CallAfter(self.graph.SetExtruder0TargetTemperature, setpoint)
-                    if self.display_gauges: wx.CallAfter(self.hottgauge.SetTarget, setpoint)
+                    if 0:
+                        if self.display_gauges: wx.CallAfter(self.hottgauge.SetTarget, setpoint)
+                    else:
+                        wx.CallAfter(self.hottgauge.SetTarget, setpoint)
+
             if "T1" in temps:
                 hotend_temp = float(temps["T1"][0])
+                # swyoo 2015.09.21 change for hotgauge2
+                wx.CallAfter(self.hottgauge2.SetValue, hotend_temp)
+                wx.CallAfter(self.text_print_nozzle_temp2_on.SetLabel, str(hotend_temp) + u"\u00B0C")
+
                 if self.display_graph: wx.CallAfter(self.graph.SetExtruder1Temperature, hotend_temp)
                 setpoint = temps["T1"][1]
                 if setpoint and self.display_graph:
                     wx.CallAfter(self.graph.SetExtruder1TargetTemperature, float(setpoint))
+
+                # swyoo 2015.09.21 change bed to hotgauge2
+                if setpoint is not None:
+                    setpoint = float(temps["T1"][1])
+                    wx.CallAfter(self.hottgauge2.SetTarget, setpoint)
+
+            # ==================bed start
             bed_temp = float(temps["B"][0]) if "B" in temps and temps["B"][0] else None
             if bed_temp is not None:
                 if self.display_graph: wx.CallAfter(self.graph.SetBedTemperature, bed_temp)
-                if self.display_gauges: wx.CallAfter(self.bedtgauge.SetValue, bed_temp)
+                # swyoo 2015.09.21 no use
+                if 0:
+                    if self.display_gauges: wx.CallAfter(self.bedtgauge.SetValue, bed_temp)
+
                 setpoint = temps["B"][1]
                 if setpoint:
                     setpoint = float(setpoint)
                     if self.display_graph: wx.CallAfter(self.graph.SetBedTargetTemperature, setpoint)
-                    if self.display_gauges: wx.CallAfter(self.bedtgauge.SetTarget, setpoint)
+                    # swyoo 2015.09.21 no use
+                    if 0:
+                        if self.display_gauges: wx.CallAfter(self.bedtgauge.SetTarget, setpoint)
+
+            # swyoo 2015.09.09 hotend temp
+            # wx.CallAfter(self.text_print_nozzle_temp1_on.SetLabel, str(hotend_temp))
+            # wx.CallAfter(self.text_print_nozzle_temp2_on.SetLabel, str(hotend_temp2))
+
         except:
             self.logError(traceback.format_exc())
 
@@ -1678,6 +2026,11 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         if x is not None: self.current_pos[0] = x
         if y is not None: self.current_pos[1] = y
         if z is not None: self.current_pos[2] = z
+
+        # swyoo 2015.09.09 x, y, z position
+        wx.CallAfter(self.text_motor_x_position.SetLabel, ": " + str(x))
+        wx.CallAfter(self.text_motor_y_position.SetLabel, ": " + str(y))
+        wx.CallAfter(self.text_motor_z_position.SetLabel, ": " + str(z))
 
     def recvcb_actions(self, l):
         if l.startswith("!!"):
@@ -2180,6 +2533,272 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             with open(configfile, "w") as f:
                 f.write(data)
 
+    def display_ch(self, event):
+        # self.dis_mode = 1
+
+        if self.dis_mode == 0:
+            wx.CallLater(100, self.ShowFullScreen, True)
+            self.dis_mode = 1
+        else:
+            wx.CallLater(100, self.ShowFullScreen, False)
+            self.dis_mode = 0
+
+    def temp_ch(self, head, event):
+        # self.dis_mode = 1
+
+        if head == "head_one":
+            if event == "down":
+                if self.var_temp_1_value == 5:
+                    return
+                self.var_temp_1_value = self.var_temp_1_value - 1
+            elif event == "up":
+                if self.var_temp_1_value == 260:
+                    return
+                self.var_temp_1_value = self.var_temp_1_value + 1
+
+            wx.CallAfter(self.text_temp_1.SetLabel, str(self.var_temp_1_value) + u"\u00B0C")
+        elif head == "head_two":
+            if event == "down":
+                if self.var_temp_2_value == 5:
+                    return
+                self.var_temp_2_value = self.var_temp_2_value - 1
+            elif event == "up":
+                if self.var_temp_2_value == 260:
+                    return
+                self.var_temp_2_value = self.var_temp_2_value + 1
+
+            wx.CallAfter(self.text_temp_2.SetLabel, str(self.var_temp_2_value) + u"\u00B0C")
+
+    # swyoo 2015.09.14 for calculator
+    def load_calculator_value(self, event):
+        dlg = Calculator(event)
+        dlg.ShowModal()
+        dlg.Destroy()
+        try:
+            if dlg.cal_value == "pass":
+                pass
+            else:
+                # something do
+                wx.CallAfter(self.btn_calulator.SetLabel, (dlg.cal_value))
+        except Exception, e:
+            # wx.LogError(str(e))
+            self.log(str(e))
+            # return
+    def load_calculator_motor(self, event):
+        dlg = Calculator(event)
+        dlg.ShowModal()
+        dlg.Destroy()
+        try:
+            if dlg.cal_value == "pass":
+                pass
+            else:
+                int_val = float(dlg.cal_value)
+                if event == "zoffset":
+                    self.On_zoffset(event, int_val)
+                else:
+                    self.move_distance(event, int_val, "cal")
+        except Exception, e:
+            # wx.LogError(str(e))
+            self.log(str(e))
+            # return
+
+    # def load_print_output_speed(self, event):
+    #     dlg = Calculator("Print Speed")
+    #     dlg.ShowModal()
+    #     dlg.Destroy()
+    #     try:
+    #         if dlg.cal_value == "pass":
+    #             pass
+    #         else:
+    #             self.do_setspeed_flexo(dlg.cal_value)
+    #             wx.CallAfter(self.btn_print_output_speed.SetLabel, (dlg.cal_value + " %"))
+    #     except Exception, e:
+    #         # wx.LogError(str(e))
+    #         self.log(str(e))
+    #         # return
+    #
+    # def load_print_fan_speed(self, event):
+    #     dlg = Calculator("Fan Speed")
+    #     dlg.ShowModal()
+    #     dlg.Destroy()
+    #     try:
+    #         if dlg.cal_value == "pass":
+    #             pass
+    #         else:
+    #             # something do
+    #             wx.CallAfter(self.btn_print_fan_speed.SetLabel, (dlg.cal_value + " %"))
+    #     except Exception, e:
+    #         # wx.LogError(str(e))
+    #         self.log(str(e))
+
+    # swyoo 2015.09.15 for combobox select
+    def On_Speed_Select(self, event):
+        item = event.GetSelection()
+        speed_val = self.speed_values[item]
+        self.do_setspeed_flexo(speed_val)
+
+    def On_Pan_Select(self, event):
+        item = event.GetSelection()
+        pan_val = self.pan_values[item]
+        try:
+            pan_speed = int(pan_val)
+            if self.p.online:
+                # swyoo pan 0-255, 0 is OFF
+                if pan_val == "0":
+                    self.p.send_now("M107")
+                else:
+                    self.p.send_now("M106 S" + pan_val)
+                self.log(_("Setting pan speed factor to %d.") % pan_speed)
+            else:
+                self.logError(_("Printer is not online."))
+        except Exception, x:
+            self.logError(_("You must enter a pab speed. (%s)") % (repr(x),))
+
+    # swyoo 2015.09.16 for filament change
+    def On_Filament_Change(self, event = None):
+
+         # swyoo 2015.09.21 add
+        if not self.p.online:
+            dlg = wx.MessageDialog(self, _("Printer is not online. Unable to filament change."), _("Filament"), wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+
+        # if not self.paused:
+        self.log(_("Print filament change at: %s") % format_time(time.time()))
+
+        if self.sdprinting:
+            self.p.send_now("M600")
+        elif not self.p.printing:
+            dlg = wx.MessageDialog(self, _("Printer is not printing state. Unable to filament change."), _("Filament"), wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+        else:
+            # ;Pause Code
+            if self.print_next_state is not "resume":
+                self.pause(None)
+
+            self.log(_("Filament Change."))
+            # G91            ;Set Relative Mode
+            self.p.send_now("G91")
+            # G1 E-5.000000 F500   ;Retract 5mm
+            self.p.send_now("G1 E-5.0 F500")
+            # G1 Z15 F300         ;move Z up 15mm
+            self.p.send_now("G1 Z15 F300")
+            # G90            ;Set Absolute Mode
+            self.p.send_now("G90")
+            # G1 X20 Y20 F9000      ;Move to hold position
+            self.p.send_now("G1 X20 Y20 F5000")
+            # G91            ;Set Relative Mode
+            self.p.send_now("G91")
+            # G1 E-40 F500      ;Retract 40mm
+            self.p.send_now("G1 E-40 F500") #G1 E-40 F500
+            # for extrude speed and get print position
+            # G90            ;Set Absolute Mode
+            self.p.send_now("G90")
+            # G1 F5000         ;Set speed limits
+            # self.p.send_now("G1 F5000")
+
+            if 0:
+                # M0            ;Idle Hold : swyoo printrun no action
+                self.p.send_now("M0")
+                # G90            ;Set Absolute Mode
+                self.p.send_now("G90")
+                # G1 F5000         ;Set speed limits
+                self.p.send_now("G1 F5000")
+                # G28 X0 Y0         ;Home X Y
+                self.p.send_now("G28 X0 Y0")
+                # M82            ;Set extruder to Absolute Mode
+                self.p.send_now("M82")
+                # G92 E0         ;Set Extruder to 0
+                self.p.send_now("G92 E0")
+
+        self.paused = True
+        self.On_Print_state("filament_ch")
+        # self.p.runSmallScript(self.pauseScript)
+        self.extra_print_time += int(time.time() - self.starttime)
+        wx.CallAfter(self.pausebtn.SetLabel, _("Resume"))
+        wx.CallAfter(self.toolbarsizer.Layout)
+        # else:
+        #     self.log(_("Filament change."))
+        #     self.paused = False
+        #     if self.sdprinting:
+        #         self.p.send_now("M24")
+        #     else:
+        #         self.p.resume()
+        #     self.On_Print_state("resume")
+
+    # swyoo 2015.09.16 image change
+    # off_line, ready, print, pause, filament_ch
+    # self.print_next_state : print, pause, resume
+    def On_Print_state(self, state):
+
+        if state == "ready":
+            self.print_next_state = "print"
+            wx.CallAfter(self.btn_bmp_print_start.SetBitmapLabel, self.bmp_print_start)
+        elif state == "print":
+            self.print_next_state = "pause"
+            wx.CallAfter(self.btn_bmp_print_start.SetBitmapLabel, self.bmp_print_pause)
+        elif state == "pause":
+            self.print_next_state = "resume"
+            wx.CallAfter(self.btn_bmp_print_start.SetBitmapLabel, self.bmp_print_resume)
+        elif state == "resume":
+            self.print_next_state = "pause"
+            wx.CallAfter(self.btn_bmp_print_start.SetBitmapLabel, self.bmp_print_pause)
+        elif state == "filament_ch":
+            self.print_next_state = "filament_done"
+            wx.CallAfter(self.btn_bmp_print_start.SetBitmapLabel, self.bmp_print_resume)
+        else:
+            self.print_next_state = "print"
+            wx.CallAfter(self.btn_bmp_print_start.SetBitmapLabel, self.bmp_print_start)
+
+        self.Refresh()
+
+    # swyoo 2015.09.21 add second head extrude
+    def On_extrude(self, axis):
+        if axis == "Extrude1":
+            self.extrude_head = "T0"
+            self.onecmd('pront_extrude')
+            self.cur_button = None
+        elif axis == "Reverse1":
+            self.extrude_head = "T0"
+            self.onecmd('pront_reverse')
+            self.cur_button = None
+        elif axis == "Extrude2":
+            self.extrude_head = "T1"
+            self.onecmd('pront_extrude')
+            self.cur_button = None
+        elif axis == "Reverse2":
+            self.extrude_head = "T1"
+            self.onecmd('pront_reverse')
+            self.cur_button = None
+        else:
+            return
+
+    # swyoo 2015.10.01. add zoffset function
+    def On_zoffset(self, event, val):
+        imsi_list = self.build_dimensions_list
+        imsi_list[5] = val
+        number = 0
+        for x in imsi_list:
+            if number < 3:
+                imsi_list[number] = "{:.2f}".format(x)
+            else:
+                imsi_list[number] = "{:+.2f}".format(x)
+            number += 1
+
+        text_list = str(imsi_list[0])
+        text_list += "x" + str(imsi_list[1])
+        text_list += "x" + str(imsi_list[2])
+
+        for j in range(3, 9):
+            text_list += str(imsi_list[j])
+
+        self.set("build_dimensions", text_list)
+        imsi_zoffset = float(imsi_list[5])
+        wx.CallAfter(self.text_zoffset.SetLabel, ":" + str(imsi_zoffset))
+
 class PronterApp(wx.App):
 
     mainwindow = None
@@ -2189,3 +2808,12 @@ class PronterApp(wx.App):
         self.SetAppName("Pronterface")
         self.mainwindow = PronterWindow(self)
         self.mainwindow.Show()
+        # swyoo 2015.08.31 maximize the frame
+        # self.mainwindow.Maximize(True)
+        if os.name is not "nt":
+            self.mainwindow.ShowFullScreen(True)
+
+        wx.CallLater(1000, self.mainwindow.connect, False)
+        # swyoo for test imsi
+        # MainWindow.switch_tab(self.mainwindow, 5)
+        # wx.CallLater(1000, self.mainwindow.ShowFullScreen, False)
