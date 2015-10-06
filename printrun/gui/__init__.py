@@ -314,6 +314,7 @@ class MainWindow(wx.Frame):
         self.notebook.SetBackgroundColour(self.notebook.GetThemeBackgroundColour())
         self.panel.SetSizer(self.notesizer)
         # self.panel.SetSizerAndFit(self.notesizer)
+        self.Bind(wx.EVT_CLOSE, self.kill)
         minsize = [600, 450]
         self.SetMinSize(self.ClientToWindowSize(minsize))  # client to window
         self.Fit()
